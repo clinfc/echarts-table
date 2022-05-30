@@ -88,9 +88,11 @@ export function useLineChartTable(container: Ref<HTMLDivElement>, option: UseLin
       show: true,
       trigger: 'axis',
       appendToBody: true,
+      axisPointer: {
+        type: 'shadow',
+      },
     },
     axisPointer: {
-      type: 'line',
       link: [{ xAxisIndex: 'all' }],
     },
   })
@@ -167,11 +169,19 @@ export function useLineChartTable(container: Ref<HTMLDivElement>, option: UseLin
       series.push({
         name: label,
         type: 'line',
+        symbol: 'circle',
+        symbolSize: 7,
         xAxisIndex: index,
         yAxisIndex: index,
         data: row,
         lineStyle: {
           type: 'dashed',
+        },
+        itemStyle: {
+          color: '#999',
+        },
+        emphasis: {
+          scale: false,
         },
       })
 
