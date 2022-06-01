@@ -6,7 +6,19 @@ import {
   type LineSeriesOption,
   type TooltipComponentOption,
 } from 'echarts'
-import { computed, onUnmounted, reactive, readonly, ref, shallowRef, toRaw, watch, watchEffect, type Ref } from 'vue'
+import {
+  computed,
+  onUnmounted,
+  reactive,
+  readonly,
+  ref,
+  shallowRef,
+  toRaw,
+  watch,
+  watchEffect,
+  type DeepReadonly,
+  type Ref,
+} from 'vue'
 
 type Opts = ComposeOption<LineSeriesOption | GridComponentOption | TooltipComponentOption>
 
@@ -34,6 +46,23 @@ export type LCTSize = {
   rowHeight?: number
 }
 
+export type PannelSize = {
+  /** 展示 echarts 的容器宽度 */
+  chartWidth?: number
+  /** 展示 echarts 的容器高度 */
+  chartHeight?: number
+  /** 头部标签高度 */
+  headLableHeight?: number
+  /** 主体标签宽度 */
+  bodyLabelWidth?: number
+}
+
+export type LCTPannelSize = Required<LCTSize> &
+  Required<PannelSize> & {
+    pannelWidth: number
+    pannelHeight: number
+  }
+
 /**
  * 折线图数据集合
  */
@@ -46,6 +75,7 @@ export type UseLineChartTableOpts = {
   size?: LCTSize
   data?: LCTData
   edge?: LCTEdge
+  pannel?: PannelSize
   /** 单个折线图的 x 轴标签集合 */
   colLabel?: string[]
   /** 所有折线图的 y 轴标签集合，每项数据对应一个独立的折线图 y 轴 */
@@ -53,15 +83,14 @@ export type UseLineChartTableOpts = {
   rowPreviewLable?: string[]
 }
 
-/**
- * echarts 折线图每列的默认宽度
- */
-export const LCT_COL_WIDTH = ref(50)
-
-/**
- * echarts 折线图的默认高度
- */
-export const LCT_ROW_HEIGHT = ref(50)
+export const LCT_DEFAULT = reactive({
+  colWidth: 50,
+  rowHeight: 50,
+  headLableHeight: 40,
+  bodyLableWidth: 100,
+  chartWidth: 500,
+  chartHeight: 500,
+})
 
 export function useLineChartTable(container: Ref<HTMLDivElement>, option: UseLineChartTableOpts = {}) {
   /**
@@ -71,6 +100,7 @@ export function useLineChartTable(container: Ref<HTMLDivElement>, option: UseLin
     size: {},
     data: {},
     edge: {},
+    pannel: {},
     colLabel: [],
     rowLabel: [],
     ...option,
@@ -82,7 +112,7 @@ export function useLineChartTable(container: Ref<HTMLDivElement>, option: UseLin
   /**
    * echarts 画布的宽高、单个个折线图的高度、单个折线图数据项的宽度
    */
-  const size = reactive({} as Required<LCTSize>)
+  const size = reactive({} as LCTPannelSize)
 
   /**
    * echarts 的配置项
@@ -111,7 +141,7 @@ export function useLineChartTable(container: Ref<HTMLDivElement>, option: UseLin
     const rows = rowLabel.value.length
 
     if (rowHeight || !height) {
-      size.rowHeight = rowHeight || LCT_ROW_HEIGHT.value
+      size.rowHeight = rowHeight || LCT_DEFAULT.rowHeight
       size.height = size.rowHeight * rows + top + bottom
     } else {
       size.height = height
@@ -119,12 +149,24 @@ export function useLineChartTable(container: Ref<HTMLDivElement>, option: UseLin
     }
 
     if (colWidth || !width) {
-      size.colWidth = colWidth || LCT_COL_WIDTH.value
+      size.colWidth = colWidth || LCT_DEFAULT.colWidth
       size.width = size.colWidth * cols + left + right
     } else {
       size.width = width
       size.colWidth = (width - left - right) / cols
     }
+  })
+
+  watchEffect(() => {
+    const { bodyLabelWidth, headLableHeight, chartWidth, chartHeight } = config.pannel
+
+    size.bodyLabelWidth = bodyLabelWidth ?? LCT_DEFAULT.bodyLableWidth
+    size.headLableHeight = headLableHeight ?? LCT_DEFAULT.headLableHeight
+    size.chartWidth = chartWidth ?? LCT_DEFAULT.chartWidth
+    size.chartHeight = chartHeight ?? LCT_DEFAULT.chartHeight
+
+    size.pannelWidth = size.chartWidth + size.bodyLabelWidth
+    size.pannelHeight = size.chartHeight + size.headLableHeight
   })
 
   // 生成 echarts 的 grid、xAxis、yAxis 配置项

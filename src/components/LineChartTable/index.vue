@@ -1,26 +1,26 @@
 <template>
   <div class="lchart" :style="cssVar">
-    <div class="lchart-row">
-      <div class="lchart-row__label">
-        <div class="lchart-row__label-container"></div>
+    <div class="lchart-head">
+      <div class="lchart-head__crossover">
+        <div class="lchart-head__crossover-container"></div>
       </div>
-      <div class="lchart-col__label">
-        <div class="lchart-col__label-container">
+      <div class="lchart-head__label">
+        <div class="lchart-head__label-container">
           <template v-for="label in colLabel" :key="label">
-            <div class="lchart-col__label-container--content">{{ label }}</div>
+            <div class="lchart-head__label-container--content">{{ label }}</div>
           </template>
         </div>
       </div>
     </div>
-    <div class="lchart-row">
-      <div class="lchart-row__label echarts-left">
-        <div class="lchart-row__label-container">
+    <div class="lchart-body">
+      <div class="lchart-body__label echarts-left">
+        <div class="lchart-body__label-container">
           <template v-for="label in rowLabel" :key="label">
-            <div class="lchart-col__label-container--content">{{ label }}</div>
+            <div class="lchart-body__label-container--content">{{ label }}</div>
           </template>
         </div>
       </div>
-      <div class="lchart__echarts">
+      <div class="lchart-body__echarts">
         <div class="lchart__echarts-scroll">
           <div ref="echartsRef"></div>
         </div>
@@ -40,10 +40,14 @@
 
       const { config, size, colLabel, rowLabel } = useLineChartTable(echartsRef, {
         size: {
-          rowHeight: 40,
-          colWidth: 70,
+          rowHeight: 150,
+          colWidth: 150,
         },
-        colLabel: ['2018-06', '2018-07', '2018-08', '2018-09', '2018-10', '2018-11', '2018-12'],
+        pannel: {
+          chartWidth: 600,
+          chartHeight: 300,
+        },
+        colLabel: ['2018-05', '2018-06', '2018-07', '2018-08', '2018-09', '2018-10', '2018-11', '2018-12'],
         rowLabel: ['第一行', '第二行', '第三行', '第四行', '第五行', '第六行', '第七行'],
         data: {
           '第一行': [1, 3, 8, 0, 7, 4, 6, 10],
@@ -57,15 +61,18 @@
       })
 
       Reflect.set(window, 'config', config)
+      Reflect.set(window, 'size', size)
 
       const cssVar = computed(() => {
         return {
-          '--lchart-col-label-width': `${size.colWidth}px`,
-          '--lchart-col-label-height': `${size.rowHeight}px`,
-          '--lchart-row-label-width': `70px`,
-          '--lchart-row-label-height': `${size.rowHeight}px`,
-          '--lchart-echarts-width': `900px`,
-          '--lchart-echarts-height': `900px`,
+          '--lchart-head-label-width': `${size.colWidth}px`,
+          '--lchart-head-label-height': `${size.headLableHeight}px`,
+          '--lchart-body-label-width': `${size.bodyLabelWidth}px`,
+          '--lchart-body-label-height': `${size.rowHeight}px`,
+          '--lchart-chart-width': `${size.chartWidth}px`,
+          '--lchart-chart-height': `${size.chartHeight}px`,
+          '--lchart-pannel-width': `${size.pannelWidth}px`,
+          '--lchart-pannel-height': `${size.pannelHeight}px`,
         } as CSSProperties
       })
 
@@ -75,57 +82,67 @@
 </script>
 
 <style lang="scss">
+  $border: 1px solid #999;
   .lchart {
     display: flex;
     flex-direction: column;
-    &-row {
+    max-width: var(--lchart-pannel-width);
+    max-height: var(--lchart-pannel-height);
+    overflow: hidden;
+    &-head {
       display: flex;
-    }
-    &-row__label {
-      overflow: hidden;
-      position: relative;
-      width: var(--lchart-row-label-width);
-      &.echarts-left {
-        height: var(--lchart-echarts-height);
+      border-bottom: $border;
+      box-sizing: border-box;
+      height: var(--lchart-head-label-height);
+      &__crossover {
+        width: var(--lchart-body-label-width);
+        height: var(--lchart-head-label-height);
       }
-      &-container {
-        position: absolute;
-        top: 0;
-        left: 0;
-        display: flex;
-        flex-direction: column;
-        &--content {
-          width: var(--lchart-row-label-width);
-          height: var(--lchart-row-label-height);
+      &__label {
+        position: relative;
+        width: var(--lchart-chart-width);
+        height: var(--lchart-head-label-height);
+        overflow: hidden;
+        &-container {
+          position: absolute;
+          top: 0;
+          left: 0;
           display: flex;
-          justify-content: center;
-          align-items: center;
+          flex-wrap: nowrap;
+          &--content {
+            width: var(--lchart-head-label-width);
+            height: var(--lchart-head-label-height);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+          }
         }
       }
     }
-    &-col__label {
-      overflow: hidden;
-      width: var(--lchart-echarts-width);
-      height: var(--lchart-col-label-height);
-      position: relative;
-      &-container {
-        display: flex;
-        position: absolute;
-        top: 0;
-        left: 0;
-        &--content {
-          width: var(--lchart-col-label-width);
-          height: var(--lchart-col-label-height);
-          display: flex;
-          justify-content: center;
-          align-items: center;
+    &-body {
+      display: flex;
+      &__label {
+        position: relative;
+        width: var(--lchart-body-label-width);
+        height: var(--lchart-chart-height);
+        overflow: hidden;
+        &-container {
+          position: absolute;
+          top: 0;
+          left: 0;
+          &--content {
+            width: var(--lchart-body-label-width);
+            height: var(--lchart-body-label-height);
+            display: flex;
+            align-items: center;
+          }
         }
       }
-    }
-    &__echarts {
-      width: var(--lchart-echarts-width);
-      height: var(--lchart-echarts-height);
-      overflow: auto;
+      &__echarts {
+        width: var(--lchart-chart-width);
+        height: var(--lchart-chart-height);
+        overflow: auto;
+      }
     }
   }
 </style>
