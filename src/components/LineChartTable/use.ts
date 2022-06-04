@@ -1,3 +1,4 @@
+import { useEventListener } from '@vueuse/core'
 import {
   init,
   type ComposeOption,
@@ -14,105 +15,62 @@ import {
   ref,
   shallowRef,
   toRaw,
+  unref,
   watch,
   watchEffect,
-  type DeepReadonly,
   type Ref,
 } from 'vue'
+import type { LChartEdge, LSize, UnRelyKey, UseLineChartTableOpts } from './types'
+import { computedIntervel } from './utils'
 
 type Opts = ComposeOption<LineSeriesOption | GridComponentOption | TooltipComponentOption>
 
-/**
- * 布局外边距
- */
-export type LCTEdge = {
-  top?: number
-  left?: number
-  right?: number
-  bottom?: number
-}
-
-/**
- * 画布的宽高、单个个折线图的高度、单个折线图数据项的宽度
- */
-export type LCTSize = {
-  /** 画布的宽度 */
-  width?: number
-  /** 画布的高度 */
-  height?: number
-  /** 单个折线图数据项的宽度 */
-  colWidth?: number
-  /** 单个个折线图的高度 */
-  rowHeight?: number
-}
-
-export type PannelSize = {
-  /** 展示 echarts 的容器宽度 */
-  chartWidth?: number
-  /** 展示 echarts 的容器高度 */
-  chartHeight?: number
-  /** 头部标签高度 */
-  headLableHeight?: number
-  /** 主体标签宽度 */
-  bodyLabelWidth?: number
-}
-
-export type LCTPannelSize = Required<LCTSize> &
-  Required<PannelSize> & {
-    pannelWidth: number
-    pannelHeight: number
-  }
-
-/**
- * 折线图数据集合
- */
-export type LCTData = Record<string, number[]>
-
-/**
- * 折线图表格的所有配置
- */
-export type UseLineChartTableOpts = {
-  size?: LCTSize
-  data?: LCTData
-  edge?: LCTEdge
-  pannel?: PannelSize
-  /** 单个折线图的 x 轴标签集合 */
-  colLabel?: string[]
-  /** 所有折线图的 y 轴标签集合，每项数据对应一个独立的折线图 y 轴 */
-  rowLabel?: string[]
-  rowPreviewLable?: string[]
-}
-
 export const LCT_DEFAULT = reactive({
-  colWidth: 50,
-  rowHeight: 50,
-  headLableHeight: 40,
-  bodyLableWidth: 100,
+  lineChartColWidth: 50,
+  lineChartRowsHeight: 60,
   chartWidth: 500,
   chartHeight: 500,
 })
+
+const UN_RELY_KEY: UnRelyKey[] = ['top', 'left', 'right', 'bottom', 'xAxisLabelHeight', 'yAxisLabelWidth']
 
 export function useLineChartTable(container: Ref<HTMLDivElement>, option: UseLineChartTableOpts = {}) {
   /**
    * 数据池/配置池
    */
-  const config = reactive({
-    size: {},
+  const config = reactive<Required<UseLineChartTableOpts>>({
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    canvasWidth: 0,
+    canvasHeight: 0,
+    lineChartColWidth: 0,
+    lineChartRowsHeight: 0,
+    xAxisLabelHeight: 0,
+    yAxisLabelWidth: 0,
+    tableWidth: 0,
+    tableHeight: 0,
     data: {},
-    edge: {},
-    pannel: {},
-    colLabel: [],
-    rowLabel: [],
+    xAxisLabel: [],
+    yAxisLabel: [],
+    viewWidth: 0,
+    viewHeight: 0,
+    markAreaIndex: null,
     ...option,
   })
-
-  const rowLabel = computed(() => config.rowPreviewLable ?? config.rowLabel)
-  const colLabel = computed(() => config.colLabel)
 
   /**
    * echarts 画布的宽高、单个个折线图的高度、单个折线图数据项的宽度
    */
-  const size = reactive({} as LCTPannelSize)
+  const size = reactive({} as Required<LSize>)
+
+  const chartSize = computed(() => {
+    return {
+      width: size.canvasWidth,
+      height: size.canvasHeight,
+    }
+  })
 
   /**
    * echarts 的配置项
@@ -121,7 +79,6 @@ export function useLineChartTable(container: Ref<HTMLDivElement>, option: UseLin
     tooltip: {
       show: true,
       trigger: 'axis',
-      appendToBody: true,
       axisPointer: {
         type: 'shadow',
       },
@@ -131,58 +88,89 @@ export function useLineChartTable(container: Ref<HTMLDivElement>, option: UseLin
     },
   })
 
-  // 计算 echarts 画布的宽高、单个个折线图的高度、单个折线图数据项的宽度
+  // 数据同步
+  UN_RELY_KEY.forEach((key) => {
+    watch(
+      () => config[key],
+      (value) => {
+        size[key] = value
+      },
+      { immediate: true }
+    )
+  })
+
+  // 计算 echarts 画布的高度、单个个折线图的高度
   watchEffect(() => {
-    const { size: ets, edge } = config
-    const { width, height, colWidth, rowHeight } = ets
-    const { top = 2, left = 0, right = 0, bottom = 2 } = edge
+    const { top, bottom, canvasHeight, lineChartRowsHeight } = config
 
-    const cols = colLabel.value.length
-    const rows = rowLabel.value.length
+    const rows = config.yAxisLabel.length
 
-    if (rowHeight || !height) {
-      size.rowHeight = rowHeight || LCT_DEFAULT.rowHeight
-      size.height = size.rowHeight * rows + top + bottom
+    if (lineChartRowsHeight || !canvasHeight) {
+      size.lineChartRowsHeight = lineChartRowsHeight || LCT_DEFAULT.lineChartRowsHeight
+      size.canvasHeight = size.lineChartRowsHeight * rows + top + bottom
     } else {
-      size.height = height
-      size.rowHeight = (height - top - bottom) / rows
-    }
-
-    if (colWidth || !width) {
-      size.colWidth = colWidth || LCT_DEFAULT.colWidth
-      size.width = size.colWidth * cols + left + right
-    } else {
-      size.width = width
-      size.colWidth = (width - left - right) / cols
+      size.canvasHeight = canvasHeight
+      size.lineChartRowsHeight = (canvasHeight - top - bottom) / rows
     }
   })
 
+  // 计算 echarts 画布的宽度、单个折线图数据项的宽度
   watchEffect(() => {
-    const { bodyLabelWidth, headLableHeight, chartWidth, chartHeight } = config.pannel
+    const { left, right, canvasWidth, lineChartColWidth } = config
 
-    size.bodyLabelWidth = bodyLabelWidth ?? LCT_DEFAULT.bodyLableWidth
-    size.headLableHeight = headLableHeight ?? LCT_DEFAULT.headLableHeight
-    size.chartWidth = chartWidth ?? LCT_DEFAULT.chartWidth
-    size.chartHeight = chartHeight ?? LCT_DEFAULT.chartHeight
+    const cols = config.xAxisLabel.length
 
-    size.pannelWidth = size.chartWidth + size.bodyLabelWidth
-    size.pannelHeight = size.chartHeight + size.headLableHeight
+    if (lineChartColWidth || !canvasWidth) {
+      size.lineChartColWidth = lineChartColWidth || LCT_DEFAULT.lineChartColWidth
+      size.canvasWidth = size.lineChartColWidth * cols + left + right
+    } else {
+      size.canvasWidth = canvasWidth
+      size.lineChartColWidth = (canvasWidth - left - right) / cols
+    }
   })
 
-  // 生成 echarts 的 grid、xAxis、yAxis 配置项
+  // 计算整个表格的宽度、图标容器的宽度
   watchEffect(() => {
-    const { top = 0, left = 0, right = 0 } = config.edge
-    const label = toRaw(colLabel.value)
+    const { yAxisLabelWidth, viewWidth, tableWidth } = config
+
+    if (tableWidth > 0) {
+      size.viewWidth = tableWidth - yAxisLabelWidth
+      size.tableWidth = tableWidth
+    } else if (viewWidth > 0) {
+      size.viewWidth = viewWidth
+      size.tableWidth = viewWidth + yAxisLabelWidth
+    }
+  })
+
+  // 计算整个表格的高度、图标容器的高度
+  watchEffect(() => {
+    const { xAxisLabelHeight, viewHeight, tableHeight } = config
+
+    if (tableHeight > 0) {
+      size.viewHeight = tableHeight - xAxisLabelHeight
+      size.tableHeight = tableHeight
+    } else if (viewHeight > 0) {
+      size.viewHeight = viewHeight
+      size.tableHeight = viewHeight + xAxisLabelHeight
+    }
+  })
+
+  // 生成 echarts 的 grid、xAxis 配置项
+  watchEffect(() => {
+    const { top, left, right } = size
+    const { xAxisLabel, yAxisLabel } = config
+
+    const label = toRaw(xAxisLabel)
 
     const grid: Opts['grid'] = []
     const xAxis: Opts['xAxis'] = []
 
-    rowLabel.value.forEach((_, index) => {
+    yAxisLabel.forEach((_, index) => {
       grid.push({
         left: left,
         right: right,
-        top: top + size.rowHeight * index,
-        bottom: size.height - (top + size.rowHeight * (index + 1)),
+        top: top + size.lineChartRowsHeight * index,
+        bottom: size.canvasHeight - (top + size.lineChartRowsHeight * (index + 1)),
       })
 
       xAxis.push({
@@ -199,13 +187,28 @@ export function useLineChartTable(container: Ref<HTMLDivElement>, option: UseLin
     eopts.xAxis = xAxis
   })
 
-  // 生成 echarts 的 series 配置项
+  // 生成 echarts 的 series、yAxis 配置项
   watchEffect(() => {
     const series: Opts['series'] = []
     const yAxis: Opts['yAxis'] = []
 
-    rowLabel.value.forEach((label, index) => {
-      const row = toRaw(config.data[label] ?? [])
+    const { data, yAxisLabel, xAxisLabel, markAreaIndex } = config
+
+    const markArea: Opts['series'] = {}
+    if (markAreaIndex && markAreaIndex >= 0) {
+      markArea.markArea = {
+        emphasis: { disabled: true },
+        itemStyle: {
+          color: '#00000005',
+        },
+        data: [[{ x: size.lineChartColWidth * markAreaIndex }, { x: size.lineChartColWidth * (markAreaIndex + 1) }]],
+      }
+    }
+
+    const empty = Array(xAxisLabel.length).fill(null)
+
+    yAxisLabel.forEach((label, index) => {
+      const row = toRaw(data[label]) ?? empty
 
       series.push({
         name: label,
@@ -224,6 +227,7 @@ export function useLineChartTable(container: Ref<HTMLDivElement>, option: UseLin
         emphasis: {
           scale: false,
         },
+        ...markArea,
       })
 
       yAxis.push({
@@ -234,8 +238,8 @@ export function useLineChartTable(container: Ref<HTMLDivElement>, option: UseLin
       })
     })
 
-    eopts.yAxis = yAxis
     eopts.series = series
+    eopts.yAxis = yAxis
   })
 
   /**
@@ -248,13 +252,18 @@ export function useLineChartTable(container: Ref<HTMLDivElement>, option: UseLin
     instance.value?.dispose()
 
     // 重建
-    instance.value = nv ? init(nv, undefined, toRaw(size)) : null
-    instance.value?.setOption(toRaw(eopts))
+    if (nv) {
+      instance.value = init(nv, undefined, toRaw(chartSize.value))
+      // debugger
+      instance.value.setOption(toRaw(eopts))
+    } else {
+      instance.value = null
+    }
   })
 
   // 重置大小
-  watch(size, () => {
-    instance.value?.resize(toRaw(size))
+  watch(chartSize, () => {
+    instance.value?.resize(toRaw(chartSize.value))
   })
 
   // 重配置
@@ -267,46 +276,99 @@ export function useLineChartTable(container: Ref<HTMLDivElement>, option: UseLin
     instance.value?.dispose()
   })
 
-  return { instance, config, eopts, size: readonly(size), colLabel, rowLabel }
+  return { instance, config, eopts, size: readonly(size) }
 }
 
 /**
- * 计算该条数据的 yAxis 的 interval、max 值
- * @param row 折线图数据
+ * scroll 监听
+ * @param target 进行滚动监听的节点
+ * @param size useLineChartTable 返回的 size
  */
-function computedIntervel(row: number[]) {
-  if (!row.length) return
+export function useLChartScroll<T extends HTMLElement>(target: Ref<T>, size: Required<LSize>) {
+  const x = ref(0)
+  const y = ref(0)
 
-  const [maxNum] = [...row].sort((a, b) => b - a)
-  const average = maxNum / 5
-  const [integer, decimal] = String(average).split('.')
+  const { across, vertical } = useScrollbarWidth(target)
 
-  let interval = average
-  let proportion = 1
+  watchEffect(() => {
+    target.value?.scrollTo({
+      left: x.value,
+      top: y.value,
+    })
+  })
 
-  if (Number(integer) > 0) {
-    interval = Number(integer[0]) + 1
-    proportion = Math.pow(10, integer.length - 1)
-  } else {
-    for (let i = 0; i < decimal.length; i++) {
-      let num = Number(decimal[i])
-      if (num) {
-        interval = num + 1
-        proportion = Math.pow(10, -i - 1)
-        break
-      }
+  useEventListener(target, 'scroll', () => {
+    const el = unref(target)
+
+    x.value = el.scrollLeft
+    y.value = el.scrollTop
+  })
+
+  /**
+   * 手动设置滚动位置
+   * @param offset
+   */
+  function scrollTo(offset: LChartEdge) {
+    const { top, left, right, bottom } = offset
+
+    const h = size.canvasHeight - (size.viewHeight - across.value)
+    const w = size.canvasWidth - (size.viewWidth - vertical.value)
+    if (typeof top === 'number') {
+      y.value = top > h ? h : top
+    } else if (typeof bottom === 'number') {
+      const value = h - bottom
+      y.value = value > 0 ? (value > h ? h : value) : 0
+    }
+
+    if (typeof left === 'number') {
+      x.value = left > w ? w : left
+    } else if (typeof right === 'number') {
+      const value = w - right
+      x.value = value > 0 ? (value > w ? w : value) : 0
     }
   }
 
-  // 刚好处于节点最大值，直接封顶
-  if ((interval - 1) * proportion * 5 == maxNum) interval--
+  return { x, y, scrollTo }
+}
 
-  const max = interval * proportion * 5
+/**
+ * 计算 scrollbar 的宽度
+ * @param root 在指定节点下计算
+ */
+function useScrollbarWidth<T extends HTMLElement>(root: Ref<T>) {
+  /**
+   * 横向滚动条宽度/底部滚动条宽度
+   */
+  const across = ref(0)
 
-  interval *= proportion
+  /**
+   * 纵向滚动条宽度/右侧滚动条宽度
+   */
+  const vertical = ref(0)
 
-  return {
-    max,
-    interval,
-  }
+  watch(
+    root,
+    (nv) => {
+      if (!nv) return
+
+      const el = document.createElement('div')
+
+      el.setAttribute(
+        'style',
+        `width: 50px;height: 50px;overflow: scroll;border: 0;padding: 0;position: absolute;opacity: 0;z-index: -1;`
+      )
+
+      el.innerHTML = `<div style="width: 100px;height: 100px"></div>`
+
+      nv.appendChild(el)
+
+      across.value = el.offsetHeight - el.clientHeight
+      vertical.value = el.offsetWidth - el.clientWidth
+
+      nv.removeChild(el)
+    },
+    { immediate: true }
+  )
+
+  return { across, vertical }
 }
