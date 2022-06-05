@@ -1,3 +1,10 @@
+import type {
+  ComposeOption,
+  GridComponentOption,
+  LineSeriesOption,
+  LinesSeriesOption,
+  TooltipComponentOption,
+} from 'echarts'
 import type { Ref } from 'vue'
 
 /**
@@ -79,8 +86,9 @@ export type UseLineChartTableOpts = LSize & {
  */
 export type UnRelyKey = keyof (LChartEdge & LTheadSize)
 
-export type LChartScroll<T extends HTMLElement = HTMLDivElement> = {
-  target: Ref<T>
-  x?: boolean
-  y?: boolean
-}
+export type Opts = ComposeOption<LineSeriesOption | GridComponentOption | TooltipComponentOption>
+
+type TooltipType<T> = T extends ArrayLike<infer O> ? TooltipType<O> : T extends undefined ? never : T
+type FormatterCallbackParams<T> = T extends (p: infer P, ...args: any) => any ? P : never
+
+export type FormatterParams = FormatterCallbackParams<TooltipType<Opts['tooltip']>['formatter']>

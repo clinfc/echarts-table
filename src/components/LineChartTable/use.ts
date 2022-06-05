@@ -1,12 +1,5 @@
 import { useEventListener } from '@vueuse/core'
-import {
-  init,
-  type ComposeOption,
-  type EChartsType,
-  type GridComponentOption,
-  type LineSeriesOption,
-  type TooltipComponentOption,
-} from 'echarts'
+import { init, type EChartsType } from 'echarts'
 import {
   computed,
   isRef,
@@ -21,10 +14,8 @@ import {
   watchEffect,
   type Ref,
 } from 'vue'
-import type { LChartEdge, LSize, UnRelyKey, UseLineChartTableOpts } from './types'
-import { computedIntervel } from './utils'
-
-type Opts = ComposeOption<LineSeriesOption | GridComponentOption | TooltipComponentOption>
+import type { LChartEdge, LSize, Opts, UnRelyKey, UseLineChartTableOpts } from './types'
+import { computedIntervel, formatterContent } from './utils'
 
 export const LCT_DEFAULT = reactive({
   lineChartColWidth: 50,
@@ -83,6 +74,8 @@ export function useLineChartTable(container: Ref<HTMLDivElement>, option: UseLin
       axisPointer: {
         type: 'shadow',
       },
+      alwaysShowContent: true,
+      formatter: formatterContent,
     },
     axisPointer: {
       link: [{ xAxisIndex: 'all' }],
