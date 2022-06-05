@@ -1,5 +1,5 @@
 <template>
-  <EchartsTable :x-axis-label="xAxisLabel" :y-axis-label="yAxisLabel" :data="data" />
+  <EchartsTable :x-axis-label="xAxisLabel" :x-axis-label-emphasis="2" :y-axis-label="yAxisLabel" :data="data" />
 </template>
 
 <script lang="ts">

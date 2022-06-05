@@ -6,24 +6,32 @@
           <div class="lchart-table__head--crossover-container"></div>
         </div>
         <div class="lchart-table__head--label">
-          <div class="lchart-table__head--label-container" :style="scrollLeft">
-            <template v-for="label in xAxisLabel" :key="label">
-              <div class="lchart-table__head--label-container--content">{{ label }}</div>
+          <div class="lchart-table__head--label-container" :style="xAxisLabelScroll">
+            <template v-for="(label, index) in xAxisLabel" :key="label">
+              <div
+                class="lchart-table__head--label-container--content"
+                :class="{ emphasis: config.markAreaIndex == index }"
+              >
+                {{ label }}
+              </div>
             </template>
           </div>
         </div>
       </div>
       <div class="lchart-table__body">
-        <div class="lchart-table__body--label">
-          <div class="lchart-table__body--label-container" :style="scrolTop">
-            <template v-for="label in yAxisLabelView" :key="label">
-              <div class="lchart-table__body--label-container--content">{{ label }}</div>
+        <div class="lchart-table__body-content" ref="scrollRef">
+          <div class="lchart-table__body-content--label" :style="bodyLabelPadding">
+            <template v-for="(label, index) in yAxisLabelView" :key="label">
+              <div
+                class="lchart-table__body-content--label-container"
+                :class="{ 'emphasis': yAxisHoverIndex == index }"
+              >
+                {{ label }}
+              </div>
             </template>
           </div>
-        </div>
-        <div class="lchart-table__body--chart">
-          <div class="lchart-table__body--chart-container" ref="scrollRef">
-            <div ref="echartsRef"></div>
+          <div class="lchart-table__body-content--chart">
+            <div class="lchart-table__body-content--chart-container" ref="echartsRef" :style="yAxisHoverEmphasis"></div>
           </div>
         </div>
       </div>
@@ -33,7 +41,7 @@
 </template>
 
 <script lang="ts">
-  import { useResizeObserver } from '@vueuse/core'
+  import { useMouseInElement, useResizeObserver } from '@vueuse/core'
   import {
     computed,
     defineComponent,
@@ -42,6 +50,7 @@
     ref,
     toRaw,
     watch,
+    watchEffect,
     type CSSProperties,
     type PropType,
     type Ref,
@@ -52,24 +61,40 @@
   export default defineComponent({
     name: 'EchartsTable',
     props: {
+      /**
+       * 数据集合
+       */
       data: {
         type: Object as PropType<LChartData>,
         required: true,
       },
+      /**
+       * x 轴标签集合
+       */
       xAxisLabel: {
         type: Array as PropType<LCahrtLabel>,
         required: true,
       },
+      /**
+       * y 轴标签集合
+       */
       yAxisLabel: {
         type: Array as PropType<LCahrtLabel>,
         required: true,
+      },
+      /**
+       * x 轴标签被高亮突出的列
+       */
+      xAxisLabelEmphasis: {
+        type: [Number, String] as PropType<number | string>,
+        default: -1,
       },
     },
     setup(props) {
       const scrollRef = ref<any>(null) as Ref<HTMLDivElement>
       const echartsRef = ref<any>(null) as Ref<HTMLDivElement>
 
-      const yAxisLabelView = ref(toRaw(props.yAxisLabel))
+      const yAxisLabelView = ref<LCahrtLabel>([])
 
       const { config, size } = useLineChartTable(echartsRef, {
         lineChartColWidth: 150,
@@ -78,23 +103,6 @@
         xAxisLabelHeight: 60,
         yAxisLabelWidth: 150,
       })
-
-      useResizeObserver(scrollRef, () => {
-        config.viewWidth = scrollRef.value.offsetWidth
-      })
-
-      const { x, y, scrollTo } = useLChartScroll(scrollRef, size)
-
-      watch(
-        () => props.xAxisLabel,
-        (label) => {
-          const now = '2018-06'
-
-          config.markAreaIndex = label.indexOf(now)
-          config.xAxisLabel = label
-        },
-        { immediate: true }
-      )
 
       watch(
         () => props.data,
@@ -105,37 +113,99 @@
       )
 
       watch(
-        yAxisLabelView,
+        () => props.yAxisLabel,
         (label) => {
-          config.yAxisLabel = label
-          yAxisLabelView.value = label
+          config.yAxisLabel = [...label]
+          yAxisLabelView.value = [...label]
         },
         { immediate: true, deep: true }
       )
 
+      watchEffect(() => {
+        const { xAxisLabel, xAxisLabelEmphasis } = props
+
+        config.xAxisLabel = xAxisLabel
+        config.markAreaIndex =
+          typeof xAxisLabelEmphasis === 'number' ? xAxisLabelEmphasis : xAxisLabel.indexOf(xAxisLabelEmphasis)
+      })
+
+      useResizeObserver(scrollRef, () => {
+        config.tableWidth = scrollRef.value.offsetWidth
+      })
+
+      /**
+       * css 变量
+       */
       const cssVar = computed(() => {
         return {
           '--lchart-head-label-width': `${size.lineChartColWidth}px`,
           '--lchart-head-label-height': `${size.xAxisLabelHeight}px`,
           '--lchart-body-label-width': `${size.yAxisLabelWidth}px`,
           '--lchart-body-label-height': `${size.lineChartRowsHeight}px`,
-          '--lchart-view-width': size.viewWidth ? `${size.viewWidth}px` : 'auto',
-          '--lchart-view-height': size.viewHeight ? `${size.viewHeight}px` : 'auto',
+          '--lchart-body-content-height': `${size.canvasHeight}px`,
+          '--lchart-view-height': `${size.viewHeight}px`,
         } as CSSProperties
       })
 
-      const scrolTop = computed(() => {
-        return {
-          top: `-${y.value}px`,
-        }
+      /**
+       * y 轴标签容器的上下内边距
+       */
+      const bodyLabelPadding = computed(() => {
+        const css: CSSProperties = {}
+        if (size.top > 0) css.paddingTop = `${size.top}px`
+        if (size.bottom > 0) css.paddingBottom = `${size.bottom}px`
+        return css
       })
-      const scrollLeft = computed(() => {
+
+      const { x, y, scrollTo } = useLChartScroll(scrollRef, size)
+
+      /**
+       * x 轴的滚动联动
+       */
+      const xAxisLabelScroll = computed(() => {
         return {
           left: `-${x.value}px`,
         }
       })
 
-      return { scrollRef, echartsRef, yAxisLabelView, config, cssVar, scrolTop, scrollLeft }
+      const { elementY, isOutside } = useMouseInElement(scrollRef)
+
+      /**
+       * y 轴悬浮选中的行索引
+       */
+      const yAxisHoverIndex = computed(() => {
+        if (isOutside.value) return -1
+        const index = Math.floor((y.value + elementY.value - size.top) / size.lineChartRowsHeight)
+        return index < yAxisLabelView.value.length ? index : -1
+      })
+
+      /**
+       * y 轴悬浮高亮
+       */
+      const yAxisHoverEmphasis = computed(() => {
+        const css: CSSProperties = {}
+        if (yAxisHoverIndex.value > -1) {
+          const top = size.top + yAxisHoverIndex.value * size.lineChartRowsHeight
+          const bottom = top + size.lineChartRowsHeight
+          css.background = `linear-gradient(to bottom, transparent ${top}px, pink ${top}px ${bottom}px, transparent ${bottom}px)`
+        }
+        return css
+      })
+
+      // @ts-ignore
+      window.scrollTo = scrollTo
+
+      return {
+        scrollRef,
+        echartsRef,
+        yAxisLabelView,
+        config,
+        yAxisHoverIndex,
+        yAxisHoverEmphasis,
+        bodyLabelPadding,
+        cssVar,
+        xAxisLabelScroll,
+      }
     },
   })
 </script>
@@ -186,38 +256,44 @@
               overflow: hidden;
               text-overflow: ellipsis;
               white-space: nowrap;
+              &.emphasis {
+                background-color: #999;
+              }
             }
           }
         }
       }
       &__body {
         overflow: hidden;
-        display: flex;
         height: var(--lchart-view-height);
-        position: relative;
-        &--label {
-          flex-shrink: 0;
-          width: var(--lchart-body-label-width);
-          &-container {
-            position: absolute;
-            top: 0;
+        &-content {
+          width: 100%;
+          height: 100%;
+          display: flex;
+          flex-wrap: nowrap;
+          position: relative;
+          overflow: auto;
+          &--label {
+            flex-shrink: 0;
+            width: var(--lchart-body-label-width);
+            height: var(--lchart-body-content-height);
+            position: sticky;
             left: 0;
-            &--content {
+            background-color: #fff;
+            z-index: 2;
+            &-container {
               width: var(--lchart-body-label-width);
               height: var(--lchart-body-label-height);
               display: flex;
               align-items: center;
-              box-shadow: 0 1px 0 0 #999;
+              &.emphasis {
+                background-color: #999;
+              }
             }
           }
-        }
-        &--chart {
-          overflow: hidden;
-          flex-grow: 1;
-          &-container {
-            width: 100%;
-            height: 100%;
-            overflow: auto;
+          &--chart {
+            flex-grow: 1;
+            z-index: 1;
           }
         }
       }

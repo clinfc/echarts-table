@@ -9,6 +9,7 @@ import {
 } from 'echarts'
 import {
   computed,
+  isRef,
   onUnmounted,
   reactive,
   readonly,
@@ -276,6 +277,9 @@ export function useLineChartTable(container: Ref<HTMLDivElement>, option: UseLin
     instance.value?.dispose()
   })
 
+  // @ts-ignore
+  window.size = size
+
   return { instance, config, eopts, size: readonly(size) }
 }
 
@@ -302,6 +306,11 @@ export function useLChartScroll<T extends HTMLElement>(target: Ref<T>, size: Req
 
     x.value = el.scrollLeft
     y.value = el.scrollTop
+
+    // console.log({
+    //   left: x.value,
+    //   top: y.value,
+    // })
   })
 
   /**
@@ -312,7 +321,7 @@ export function useLChartScroll<T extends HTMLElement>(target: Ref<T>, size: Req
     const { top, left, right, bottom } = offset
 
     const h = size.canvasHeight - (size.viewHeight - across.value)
-    const w = size.canvasWidth - (size.viewWidth - vertical.value)
+
     if (typeof top === 'number') {
       y.value = top > h ? h : top
     } else if (typeof bottom === 'number') {
@@ -320,12 +329,16 @@ export function useLChartScroll<T extends HTMLElement>(target: Ref<T>, size: Req
       y.value = value > 0 ? (value > h ? h : value) : 0
     }
 
+    const w = size.canvasWidth - (size.viewWidth - vertical.value)
+
     if (typeof left === 'number') {
       x.value = left > w ? w : left
     } else if (typeof right === 'number') {
       const value = w - right
       x.value = value > 0 ? (value > w ? w : value) : 0
     }
+
+    // console.log({ w, h })
   }
 
   return { x, y, scrollTo }
@@ -335,7 +348,7 @@ export function useLChartScroll<T extends HTMLElement>(target: Ref<T>, size: Req
  * 计算 scrollbar 的宽度
  * @param root 在指定节点下计算
  */
-function useScrollbarWidth<T extends HTMLElement>(root: Ref<T>) {
+function useScrollbarWidth<T extends HTMLElement>(root: Ref<T> | T = document.body as T) {
   /**
    * 横向滚动条宽度/底部滚动条宽度
    */
@@ -346,29 +359,31 @@ function useScrollbarWidth<T extends HTMLElement>(root: Ref<T>) {
    */
   const vertical = ref(0)
 
-  watch(
-    root,
-    (nv) => {
-      if (!nv) return
+  /**
+   * 计算滚动条的宽度和高度
+   * @param parent 根节点
+   */
+  function compute(parent: T) {
+    if (!parent) return
 
-      const el = document.createElement('div')
+    const el = document.createElement('div')
 
-      el.setAttribute(
-        'style',
-        `width: 50px;height: 50px;overflow: scroll;border: 0;padding: 0;position: absolute;opacity: 0;z-index: -1;`
-      )
+    el.setAttribute(
+      'style',
+      `width: 50px;height: 50px;overflow: scroll;border: 0;padding: 0;position: absolute;opacity: 0;z-index: -1;`
+    )
 
-      el.innerHTML = `<div style="width: 100px;height: 100px"></div>`
+    el.innerHTML = `<div style="width: 100px;height: 100px"></div>`
 
-      nv.appendChild(el)
+    parent.appendChild(el)
 
-      across.value = el.offsetHeight - el.clientHeight
-      vertical.value = el.offsetWidth - el.clientWidth
+    across.value = el.offsetHeight - el.clientHeight
+    vertical.value = el.offsetWidth - el.clientWidth
 
-      nv.removeChild(el)
-    },
-    { immediate: true }
-  )
+    parent.removeChild(el)
+  }
+
+  isRef(root) ? watch(root, compute, { immediate: true }) : compute(root)
 
   return { across, vertical }
 }
